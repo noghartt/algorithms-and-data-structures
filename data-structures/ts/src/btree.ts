@@ -52,6 +52,51 @@ export function btreeInsert<K, V>(btree: BTree<K, V>, key: K, value: V) {
   return [null, false];
 }
 
+export function btreeGet<K, V>(btree: BTree<K, V>, key: K): V | null {
+  if (btree.root === null) {
+    return null;
+  }
+
+  let node = btree.root;
+  while (node !== null) {
+    const [i, found] = binarySearch(node, key);
+
+    if (found) {
+      return node?.items?.[i]?.value || null;
+    }
+
+    if (nodeIsLeaf(node)) {
+      return null;
+    }
+
+    node = node.children[i];
+  }
+
+  return null;
+}
+
+export function btreeDelete<K, V>(btree: BTree<K, V>, key: K): V | null {
+  if (btree.root === null) {
+    return null;
+  }
+
+  const [prev, deleted] = removeNode(btree, btree.root, false, key);
+  if (!deleted) {
+    return null;
+  }
+
+  if (btree.root.items.length === 0 && nodeIsLeaf(btree.root)) {
+    btree.root = btree.root.children[0];
+  }
+  btree.length--;
+
+  if (btree.length === 0) {
+    btree.root = null;
+  }
+
+  return prev?.value || null;
+}
+
 const insertNode = <K, V>(btree: BTree<K, V>, parent: BTreeNode<K, V>, item: BTreePair<K, V>): [BTreePair<K, V> | null, boolean, boolean] => {
   const [i, found] = binarySearch(parent, item.key);
   if (found) {
@@ -106,6 +151,111 @@ const splitNode = <K, V>(btree: BTree<K, V>, node: BTreeNode<K, V>): [BTreeNode<
   updateCount(node);
 
   return [right, median!];
+}
+
+const removeNode = <K, V>(btree: BTree<K, V>, parent: BTreeNode<K, V>,  max: boolean, key: K): [BTreePair<K, V> | null, boolean] => {
+  let i: number;
+  let found: boolean;
+  if (max) {
+    i = parent.items.length - 1;
+    found = true;
+  } else {
+    [i, found] = binarySearch(parent, key);
+  }
+
+  if (nodeIsLeaf(parent)) {
+    if (!found) {
+      return [null, false];
+    }
+
+    const prev = parent.items[i];
+    parent.items.splice(i, 1);
+    parent.length--;
+    return [prev, true];
+  }
+
+  let prev: BTreePair<K, V> | null = null;
+  let deleted: boolean = false;
+
+  if (found) {
+    if (max) {
+      i++;
+      [prev, deleted] = removeNode(btree, parent.children[i], false, key);
+    } else {
+      prev = parent.items[i];
+      const [maxItem] = removeNode(btree, parent.children[i], true, key);
+      deleted = true;
+      parent.items[i] = maxItem;
+    }
+  } else {
+    [prev, deleted] = removeNode(btree, parent.children[i], max, key);
+  }
+
+  if (!deleted) {
+    return [null, false];
+  }
+
+  parent.length--;
+
+  if (parent.children.length < btree.min) {
+    rebalanceNode(btree, parent, i);
+  }
+
+  return [prev, true];
+}
+
+const rebalanceNode = <K, V>(btree: BTree<K, V>, node: BTreeNode<K, V>, i: number) => {
+  if (i === node.items.length) {
+    i--;
+  }
+
+  const n = node;
+  const left = n.children[i];
+  const right = n.children[i + 1];
+
+  if (left.items.length + right.items.length > btree.max) {
+    left.items.push(n.items[i]);
+    left.items.push(...right.items);
+    if (!nodeIsLeaf(left)) {
+      left.children.push(...right.children);
+    }
+    left.length += right.length + 1;
+
+    n.items.copyWithin(i, i + 1);
+    n.items.pop();
+
+    n.children.copyWithin(i + 1, i + 2);
+    n.children.pop();
+  } else if (left.items.length > right.items.length) {
+    right.items.push(null);
+    right.items.push(...left.items);
+    right.items[0] = n.items[i];
+    n.items[i] = left.items[left.items.length - 1];
+    left.items.pop();
+    left.length--;
+    if (!nodeIsLeaf(left)) {
+      right.children.pop();
+      right.children[0] = left.children[left.children.length - 1];
+      left.children = left.children.splice(0, left.children.length - 1);
+      left.length -= right.children[0].length;
+      right.length += right.children[0].length;
+    }
+  } else {
+    left.items.push(n.items[i]);
+    left.length++;
+    node.items[i] = right.items[0];
+    right.items.pop();
+    right.items = right.items.splice(0, right.items.length - 1);
+    right.length--;
+
+    if (!nodeIsLeaf(left)) {
+      left.children.push(right.children[0]);
+      right.children.pop();
+      right.children = right.children.splice(0, right.children.length - 1);
+      left.length += left.children[left.children.length - 1].length;
+      right.length -= left.children[left.children.length - 1].length;
+    }
+  }
 }
 
 const degreeToMinMax = (degree: number): [number, number] => {
