@@ -19,6 +19,9 @@
           ocamlPackages.ocamlformat
           ocamlPackages.ocaml
           ocamlPackages.dune
+          ocamlPackages.opam
+          ocamlPackages.ocaml-lsp
+          ocamlPackages.merlin
         ];
       in
       {
@@ -30,10 +33,17 @@
 
         devShell = pkgs.mkShell {
           nativeBuildInputs = with pkgs.ocamlPackages; [ cppo findlib ];
+
           buildInputs = with pkgs; [
             packages
             caddy # Local http server
+            curl
+            wget
           ];
+
+          shellHook = ''
+            export OPAMCURL="curl"
+          '';
         };
       }
     );

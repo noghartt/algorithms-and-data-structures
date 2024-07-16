@@ -1,3 +1,5 @@
 (library
   (name lib)
-  (public_name ocaml.lib))
+  (public_name ocaml.lib)
+  (inline_tests)
+  (preprocess (pps ppx_inline_test)))

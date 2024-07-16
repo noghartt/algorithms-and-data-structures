@@ -1,2 +1,2 @@
 (executable
- (name btree))
+ (name main))
