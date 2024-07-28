@@ -48,6 +48,7 @@ export function btreeInsert<K, V>(btree: BTree<K, V>, key: K, value: V) {
   if (replaced) {
     return [prev, true];
   }
+  updateCount(btree.root);
   btree.length++;
   return [null, false];
 }
@@ -85,9 +86,10 @@ export function btreeDelete<K, V>(btree: BTree<K, V>, key: K): V | null {
     return null;
   }
 
-  if (btree.root.items.length === 0 && nodeIsLeaf(btree.root)) {
+  if (btree.root.items.length === 0 && !nodeIsLeaf(btree.root)) {
     btree.root = btree.root.children[0];
   }
+
   btree.length--;
 
   if (btree.length === 0) {
@@ -157,8 +159,7 @@ const removeNode = <K, V>(btree: BTree<K, V>, parent: BTreeNode<K, V>,  max: boo
   let i: number;
   let found: boolean;
   if (max) {
-    i = parent.items.length - 1;
-    found = true;
+    [i, found] = [parent.items.length - 1, true];
   } else {
     [i, found] = binarySearch(parent, key);
   }
@@ -168,9 +169,8 @@ const removeNode = <K, V>(btree: BTree<K, V>, parent: BTreeNode<K, V>,  max: boo
       return [null, false];
     }
 
-    const prev = parent.items[i];
-    parent.items.splice(i, 1);
-    parent.length--;
+    const [prev] = parent.items.splice(i, 1);
+    updateCount(parent);
     return [prev, true];
   }
 
@@ -180,10 +180,10 @@ const removeNode = <K, V>(btree: BTree<K, V>, parent: BTreeNode<K, V>,  max: boo
   if (found) {
     if (max) {
       i++;
-      [prev, deleted] = removeNode(btree, parent.children[i], false, key);
+      [prev, deleted] = removeNode(btree, parent.children[i], true, null);
     } else {
       prev = parent.items[i];
-      const [maxItem] = removeNode(btree, parent.children[i], true, key);
+      const [maxItem] = removeNode(btree, parent.children[i], true, null);
       deleted = true;
       parent.items[i] = maxItem;
     }
@@ -195,9 +195,9 @@ const removeNode = <K, V>(btree: BTree<K, V>, parent: BTreeNode<K, V>,  max: boo
     return [null, false];
   }
 
-  parent.length--;
+  updateCount(parent);
 
-  if (parent.children.length < btree.min) {
+  if (parent.children[i].length < btree.min) {
     rebalanceNode(btree, parent, i);
   }
 
@@ -295,7 +295,7 @@ const binarySearch = <K, V>(node: BTreeNode<K, V>, key: K): [number, boolean] =>
   while (low < high) {
     const h = Math.floor((low + high) / 2);
     const item = node.items[h];
-    if (!(key < item!.key)) {
+    if (!(key < (item?.key || 0))) {
       low = h + 1;
     } else {
       high = h;
